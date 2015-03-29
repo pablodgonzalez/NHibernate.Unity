@@ -1,10 +1,11 @@
 using System;
 using System.Collections;
 using System.Data;
-using log4net;
-using log4net.Config;
+using System.Reflection;
 using Microsoft.Practices.Unity;
 using Microsoft.Practices.Unity.Configuration;
+using log4net;
+using log4net.Config;
 using NHibernate.Cfg;
 using NHibernate.Connection;
 using NHibernate.Engine;
@@ -79,6 +80,24 @@ namespace NHibernate.Bytecode.Unity.Tests
             Cleanup();
         }
 
+        protected virtual void OnSetUp()
+        {
+        }
+
+        /// <summary>
+        /// Set up the test. This method is not overridable, but it calls
+        /// <see cref="OnSetUp" /> which is.
+        /// </summary>
+        [SetUp]
+        public void SetUp()
+        {
+            OnSetUp();
+        }
+
+        protected virtual void OnTearDown()
+        {
+        }
+
         /// <summary>
         /// Checks that the test case cleans up after itself. This method
         /// is not overridable, but it calls <see cref="OnTearDown" /> which is.
@@ -86,6 +105,8 @@ namespace NHibernate.Bytecode.Unity.Tests
         [TearDown]
         public void TearDown()
         {
+            OnTearDown();
+
             bool wasClosed = CheckSessionWasClosed();
             bool wasCleaned = CheckDatabaseWasCleaned();
             bool wereConnectionsClosed = CheckConnectionsWereClosed();
@@ -150,6 +171,8 @@ namespace NHibernate.Bytecode.Unity.Tests
         private void Configure()
         {
             Container = new UnityContainer().LoadConfiguration();
+
+            Configure(Cfg);
 
             ApplyCacheSettings(Cfg);
         }
@@ -257,6 +280,10 @@ namespace NHibernate.Bytecode.Unity.Tests
         protected virtual bool AppliesTo(Dialect.Dialect dialect)
         {
             return true;
+        }
+
+        protected virtual void Configure(Configuration configuration)
+        {
         }
 
         protected virtual string CacheConcurrencyStrategy

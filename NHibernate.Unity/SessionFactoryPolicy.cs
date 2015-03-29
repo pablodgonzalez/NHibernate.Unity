@@ -15,14 +15,8 @@ namespace NHibernate.Unity
 {
     internal sealed class SessionFactoryPolicy : IBuilderPolicy
     {
-        private readonly bool _lazyBuildSessionFactory;
         private readonly IDictionary<string, ISessionFactory> _sessionFactories = new Dictionary<string, ISessionFactory>();
         private readonly IDictionary<string, Configuration> _configurations = new Dictionary<string, Configuration>();
-
-        public SessionFactoryPolicy(bool lazyBuildSessionFactory)
-        {
-            _lazyBuildSessionFactory = lazyBuildSessionFactory;
-        }
 
         internal ISessionFactory this[string connectionStringName]
         {
@@ -34,10 +28,10 @@ namespace NHibernate.Unity
             }
         }
 
-        internal void RegisterSessionFactory(string connectionStringName, Configuration configuration)
+        internal void RegisterSessionFactory(string connectionStringName, Configuration configuration, bool lazyBuildSessionFactory)
         {
             _configurations.Add(connectionStringName, configuration);
-            var sessionFactory = !_lazyBuildSessionFactory ? configuration.BuildSessionFactory() : default(ISessionFactory);
+            var sessionFactory = !lazyBuildSessionFactory ? configuration.BuildSessionFactory() : default(ISessionFactory);
             _sessionFactories.Add(connectionStringName, sessionFactory);
         }
 

@@ -1,9 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System;
 using Iesi.Collections.Generic;
-using NHibernate.Bytecode.Unity;
+using Microsoft.Practices.Unity;
 using NHibernate.Intercept;
 using NUnit.Framework;
 using SharpTestsEx;
@@ -27,13 +24,14 @@ namespace NHibernate.Bytecode.Unity.Tests
         [Test]
         public void LazyFieldInterceptorIsBinarySerializable()
         {
-            var pf = new ProxyFactory();
+            var pf = new ProxyFactory(new UnityContainer());
             var propertyInfo = typeof(MyClass).GetProperty("Id");
             pf.PostInstantiate("MyClass", typeof(MyClass), new HashedSet<System.Type>(), propertyInfo.GetGetMethod(), propertyInfo.GetSetMethod(), null);
-            var fieldInterceptionProxy = (IFieldInterceptorAccessor)pf.GetFieldInterceptionProxy();
+            var fieldInterceptionProxy = (IFieldInterceptorAccessor)pf.GetFieldInterceptionProxy(new MyClass());
             fieldInterceptionProxy.FieldInterceptor = new DefaultFieldInterceptor(null, null, null, "MyClass", typeof(MyClass));
 
             fieldInterceptionProxy.Should().Be.BinarySerializable();
         }
+
     }
 }

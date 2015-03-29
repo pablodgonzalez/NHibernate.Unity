@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Data;
+using System.Linq;
 using Iesi.Collections;
 using NHibernate.Connection;
 
@@ -35,23 +36,13 @@ namespace NHibernate.Bytecode.Unity.Tests
                     // all of the closings went through CloseConnection.
                     return false;
                 }
-                else
-                {
-                    // Disposing of an ISession does not call CloseConnection (should it???)
-                    // so a Diposed of ISession will leave an IDbConnection in the list but
-                    // the IDbConnection will be closed (atleast with MsSql it works this way).
-                    foreach (IDbConnection conn in connections)
-                    {
-                        if (conn.State != ConnectionState.Closed)
-                        {
-                            return true;
-                        }
-                    }
+                // Disposing of an ISession does not call CloseConnection (should it???)
+                // so a Diposed of ISession will leave an IDbConnection in the list but
+                // the IDbConnection will be closed (atleast with MsSql it works this way).
+                return connections.Cast<IDbConnection>().Any(conn => conn.State != ConnectionState.Closed);
 
-                    // all of the connections have been Disposed and were closed that way
-                    // or they were Closed through the CloseConnection method.
-                    return false;
-                }
+                // all of the connections have been Disposed and were closed that way
+                // or they were Closed through the CloseConnection method.
             }
         }
 

@@ -8,16 +8,12 @@
 
 using System;
 using System.Linq;
-using System.Reflection;
 using Common.Logging;
-using Iesi.Collections.Generic;
 using Microsoft.Practices.Unity;
 using Microsoft.Practices.Unity.InterceptionExtension;
 using NHibernate.Engine;
 using NHibernate.Intercept;
 using NHibernate.Proxy;
-using NHibernate.Type;
-using NHibernate.Unity;
 using Unity.InterceptionExtension.Serialization.Serializable;
 
 namespace NHibernate.Bytecode.Unity
@@ -25,6 +21,14 @@ namespace NHibernate.Bytecode.Unity
     public class ProxyFactory : AbstractProxyFactory
     {
         protected static readonly ILog log = LogManager.GetLogger(typeof(ProxyFactory));
+
+        protected readonly IUnityContainer Container;
+
+        public ProxyFactory(IUnityContainer container)
+        {
+            Container = container;
+            Container.AddNewExtension<NHibernateProxyUnityExtension>();
+        }
 
         /// <summary>
         /// Build a proxy using the Unity.Interception library.
@@ -39,7 +43,7 @@ namespace NHibernate.Bytecode.Unity
                 var initializer = new LazyInitializer(EntityName, PersistentClass, id, GetIdentifierMethod,
                                                           SetIdentifierMethod, ComponentIdType, session, Interfaces);
 
-                var proxy = NHibernateUnityExtension.CurrentContainer.Resolve(KeyType, EntityName);
+                var proxy = Container.Resolve(KeyType, EntityName);
 
                 (proxy as IInterceptingProxy).AddInterceptionBehavior(initializer);
 
@@ -52,22 +56,22 @@ namespace NHibernate.Bytecode.Unity
             }
         }
 
-        public override object GetFieldInterceptionProxy()
+        public override object GetFieldInterceptionProxy(object instanceToWrap)
         {
             AddAdditionalInterface(typeof(IFieldInterceptorAccessor));
 
-            var proxy = NHibernateUnityExtension.CurrentContainer.Resolve(KeyType, EntityName);
+            var proxy = Container.Resolve(KeyType, EntityName);
 
-            (proxy as IInterceptingProxy).AddInterceptionBehavior(new LazyFieldInterceptor(Interfaces));
+            (proxy as IInterceptingProxy).AddInterceptionBehavior(new LazyFieldInterceptor(instanceToWrap, Interfaces));
 
             return proxy;
         }
 
-        public override void PostInstantiate(string entityName, System.Type persistentClass, ISet<System.Type> interfaces, MethodInfo getIdentifierMethod, MethodInfo setIdentifierMethod, IAbstractComponentType componentIdType)
+        public override void PostInstantiate(string entityName, System.Type persistentClass, Iesi.Collections.Generic.ISet<System.Type> interfaces, System.Reflection.MethodInfo getIdentifierMethod, System.Reflection.MethodInfo setIdentifierMethod, Type.IAbstractComponentType componentIdType)
         {
             base.PostInstantiate(entityName, persistentClass, interfaces, getIdentifierMethod, setIdentifierMethod, componentIdType);
 
-            if (!NHibernateUnityExtension.CurrentContainer.IsRegistered(KeyType, EntityName))
+            if (!Container.IsRegistered(KeyType, EntityName))
             {
                 var injectionMember = interfaces
                   .Select(
@@ -75,7 +79,7 @@ namespace NHibernate.Bytecode.Unity
                   .Cast<InjectionMember>()
                   .Concat(new[] { new SerializableInterceptor<VirtualMethodInterceptor>() }).ToArray();
 
-                NHibernateUnityExtension.CurrentContainer.RegisterType(
+                Container.RegisterType(
                           KeyType,
                           EntityName,
                           new TransientLifetimeManager(),
@@ -88,14 +92,14 @@ namespace NHibernate.Bytecode.Unity
             }
         }
 
-        private System.Type KeyType
+        protected System.Type KeyType
         {
             get { return IsClassProxy ? PersistentClass : typeof(object); }
         }
 
         private void AddAdditionalInterface(System.Type @interface)
         {
-            new AdditionalInterface(@interface).AddPolicies(null, KeyType, EntityName, NHibernateUnityExtension.CurrrentPolicies);
+            new AdditionalInterface(@interface).AddPolicies(null, KeyType, EntityName, Container.Configure<NHibernateProxyUnityExtension>().Policies);
         }
     }
 }

@@ -8,88 +8,61 @@
 
 using Microsoft.Practices.ObjectBuilder2;
 using Microsoft.Practices.Unity;
-using Microsoft.Practices.Unity.InterceptionExtension;
 using Microsoft.Practices.Unity.ObjectBuilder;
+using NHibernate.Bytecode.Unity;
 using NHibernate.Cfg;
 
 namespace NHibernate.Unity
 {
     public class NHibernateUnityExtension : UnityContainerExtension
     {
-        private static IUnityContainer _container;
-        private static ExtensionContext _context;
         private readonly bool _lazyBuildSessionfactory;
+        private readonly bool _useBytecodeProvider;
+        private readonly bool _useProxyFactory;
 
         [InjectionConstructor]
         public NHibernateUnityExtension()
-            : this(false)
+            : this(false, true, true)
         {
         }
 
-        public NHibernateUnityExtension(bool lazyBuildSessionfactory)
+        public NHibernateUnityExtension(bool lazyBuildSessionfactory, bool useBytecodeProvider, bool useProxyFactory)
         {
             _lazyBuildSessionfactory = lazyBuildSessionfactory;
+            _useBytecodeProvider = useBytecodeProvider;
+            _useProxyFactory = useProxyFactory;
         }
 
         protected override void Initialize()
         {
-            if (_container != null)
+            if (_useBytecodeProvider)
             {
-                _context.Registering -= OnContextRegistering;
-                _context.RegisteringInstance -= OnContextRegisteringInstance;
-                _context.Policies.ClearDefault<SessionFactoryPolicy>();
+                Environment.BytecodeProvider = new BytecodeProvider(Container);
             }
-            _container = Container;
-            _context = Context;
-            _context.Registering += OnContextRegistering;
-            _context.RegisteringInstance += OnContextRegisteringInstance;
-            _context.Strategies.AddNew<SessionFactoryStrategy>(UnityBuildStage.PreCreation);
-            _context.Policies.SetDefault(new SessionFactoryPolicy(_lazyBuildSessionfactory));
-            if (_container.Configure<Interception>() == null)
-            {
-                _container.AddNewExtension<Interception>();
-            }
+            Context.Registering += OnContextRegistering;
+            Context.RegisteringInstance += OnContextRegisteringInstance;
+            Context.Strategies.AddNew<SessionFactoryStrategy>(UnityBuildStage.PreCreation);
+            Context.Policies.SetDefault(new SessionFactoryPolicy());
         }
 
-        private static void OnContextRegisteringInstance(object sender, RegisterInstanceEventArgs e)
+        private void OnContextRegisteringInstance(object sender, RegisterInstanceEventArgs e)
         {
             if (!typeof(Configuration).IsAssignableFrom(e.RegisteredType)) return;
 
             e.LifetimeManager = new ContainerControlledLifetimeManager();
-            _context.Policies.Get<SessionFactoryPolicy>(null).RegisterSessionFactory(e.Name, (Configuration)e.Instance);
+            var configuration = (Configuration)e.Instance;
+            if (!_useBytecodeProvider && _useProxyFactory)
+            {
+                configuration.Proxy(p => p.ProxyFactoryFactory<ProxyFactoryFactory>());
+            }
+            Context.Policies.Get<SessionFactoryPolicy>(null).RegisterSessionFactory(e.Name, (Configuration)e.Instance, _lazyBuildSessionfactory);
         }
 
-        private static void OnContextRegistering(object sender, RegisterEventArgs e)
+        private void OnContextRegistering(object sender, RegisterEventArgs e)
         {
             if (typeof(ISessionFactory).IsAssignableFrom(e.TypeFrom) || typeof(ISessionFactory).IsAssignableFrom(e.TypeTo))
             {
                 throw new NHibernateUnityException("The type {0} cannot be registered on unity.", typeof(ISessionFactory).AssemblyQualifiedName);
-            }
-        }
-
-        internal static IUnityContainer CurrentContainer
-        {
-            get
-            {
-                InitializeDefaultIfNot();
-                return _container;
-            }
-        }
-
-        internal static IPolicyList CurrrentPolicies
-        {
-            get
-            {
-                InitializeDefaultIfNot();
-                return _context.Policies;
-            }
-        }
-
-        private static void InitializeDefaultIfNot()
-        {
-            if (_container == null)
-            {
-                new UnityContainer().AddNewExtension<NHibernateUnityExtension>();
             }
         }
     }

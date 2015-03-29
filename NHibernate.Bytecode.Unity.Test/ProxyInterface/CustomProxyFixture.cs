@@ -8,20 +8,36 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Reflection;
+using Iesi.Collections.Generic;
 using Microsoft.Practices.Unity;
 using Microsoft.Practices.Unity.InterceptionExtension;
+using NHibernate.Cfg;
 using NHibernate.Engine;
 using NHibernate.Proxy;
 using NHibernate.Type;
 using NUnit.Framework;
-using Unity.InterceptionExtension.Serialization.Serializable;
-using Interception = Microsoft.Practices.Unity.InterceptionExtension;
 
 namespace NHibernate.Bytecode.Unity.Tests.ProxyInterface
 {
     [TestFixture]
     public class CustomProxyFixture : TestCase
     {
+        protected override Cfg.Configuration Cfg
+        {
+            get { return Container.Resolve<Cfg.Configuration>("CustomTestSource"); }
+        }
+
+        protected override ISessionFactoryImplementor Sessions
+        {
+            get { return (ISessionFactoryImplementor)Container.Resolve<ISessionFactory>("CustomTestSource"); }
+        }
+
+        protected override void Configure(Configuration configuration)
+        {
+            base.Configure(configuration);
+            configuration.Proxy(p => p.ProxyFactoryFactory<CustomProxyFactoryFactory>());
+        }
+
         [Test]
         public void CanImplementNotifyPropertyChanged()
         {
@@ -49,16 +65,6 @@ namespace NHibernate.Bytecode.Unity.Tests.ProxyInterface
                 s.Flush();
             }
         }
-
-        protected override Cfg.Configuration Cfg
-        {
-            get { return Container.Resolve<Cfg.Configuration>("CustomTestSource"); }
-        }
-
-        protected override ISessionFactoryImplementor Sessions
-        {
-            get { return (ISessionFactoryImplementor)Container.Resolve<ISessionFactory>("CustomTestSource"); }
-        }
     }
 
     public class CustomProxyFactoryFactory : IProxyFactoryFactory
@@ -68,11 +74,6 @@ namespace NHibernate.Bytecode.Unity.Tests.ProxyInterface
         public IProxyFactory BuildProxyFactory()
         {
             return new DataBindingProxyFactory();
-        }
-
-        public bool IsProxy(object entity)
-        {
-            return entity is IInterceptingProxy && entity is INHibernateProxy; ;
         }
 
         public IProxyValidator ProxyValidator
@@ -85,26 +86,34 @@ namespace NHibernate.Bytecode.Unity.Tests.ProxyInterface
             return false;
         }
 
+        public bool IsProxy(object entity)
+        {
+            return entity is IInterceptingProxy;
+        }
+
         #endregion
     }
 
     public class DataBindingProxyFactory : ProxyFactory
     {
+        public DataBindingProxyFactory()
+            : base(new UnityContainer())
+        {
+        }
+
         public override INHibernateProxy GetProxy(object id, ISessionImplementor session)
         {
             try
             {
                 var list = new List<System.Type>(Interfaces) { typeof(INotifyPropertyChanged) };
-                var interfaces = list.ToArray();
+                System.Type[] interfaces = list.ToArray();
 
                 var initializer = new DataBindingInterceptor(EntityName, PersistentClass, id, GetIdentifierMethod,
-                                                            SetIdentifierMethod, ComponentIdType, session, interfaces);
+                                                             SetIdentifierMethod, ComponentIdType, session, interfaces);
 
-                var generatedProxy = Interception.Intercept.NewInstanceWithAdditionalInterfaces(
-                     IsClassProxy ? PersistentClass : typeof(object),
-                     new VirtualMethodInterceptor().AddSerializableSupport(),
-                     new IInterceptionBehavior[] { initializer },
-                     new System.Type[0]);
+                var generatedProxy = Container.Resolve(KeyType, EntityName);
+
+                (generatedProxy as IInterceptingProxy).AddInterceptionBehavior(initializer);
 
                 return (INHibernateProxy)generatedProxy;
             }
@@ -113,6 +122,11 @@ namespace NHibernate.Bytecode.Unity.Tests.ProxyInterface
                 log.Error("Creating a proxy instance failed", e);
                 throw new HibernateException("Creating a proxy instance failed", e);
             }
+        }
+        public override void PostInstantiate(string entityName, System.Type persistentClass, Iesi.Collections.Generic.ISet<System.Type> interfaces, MethodInfo getIdentifierMethod, MethodInfo setIdentifierMethod, IAbstractComponentType componentIdType)
+        {
+            var interfacesplus = new OrderedSet<System.Type>(interfaces) { typeof(INotifyPropertyChanged) };
+            base.PostInstantiate(entityName, persistentClass, interfacesplus, getIdentifierMethod, setIdentifierMethod, componentIdType);
         }
     }
 
@@ -123,8 +137,12 @@ namespace NHibernate.Bytecode.Unity.Tests.ProxyInterface
         public DataBindingInterceptor(string entityName, System.Type persistentClass, object id,
                                       MethodInfo getIdentifierMethod, MethodInfo setIdentifierMethod,
                                       IAbstractComponentType componentIdType, ISessionImplementor session,
-            System.Type[] requiredInterfaces)
-            : base(entityName, persistentClass, id, getIdentifierMethod, setIdentifierMethod, componentIdType, session, requiredInterfaces) { }
+                                      System.Type[] requiredInterfaces)
+            : base(
+                entityName, persistentClass, id, getIdentifierMethod, setIdentifierMethod, componentIdType, session,
+                requiredInterfaces)
+        {
+        }
 
         public override IMethodReturn Invoke(IMethodInvocation input, GetNextInterceptionBehaviorDelegate getNext)
         {
@@ -142,7 +160,7 @@ namespace NHibernate.Bytecode.Unity.Tests.ProxyInterface
                 return new VirtualMethodReturn(input, null, null);
             }
 
-            var result = base.Invoke(input, getNext);
+            IMethodReturn result = base.Invoke(input, getNext);
 
             if (input.MethodBase.Name.StartsWith("set_"))
             {

@@ -1,5 +1,6 @@
 using System.Collections;
 using Iesi.Collections;
+using Microsoft.Practices.Unity;
 
 namespace NHibernate.Bytecode.Unity.Tests.ProxyInterface
 {
@@ -36,6 +37,7 @@ namespace NHibernate.Bytecode.Unity.Tests.ProxyInterface
             set { _users = value; }
         }
 
+        [InjectionConstructor]
         public Blog()
         {
             _posts = new HashedSet();

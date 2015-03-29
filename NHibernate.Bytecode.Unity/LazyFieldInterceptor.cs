@@ -22,10 +22,17 @@ namespace NHibernate.Bytecode.Unity
     [Serializable]
     public class LazyFieldInterceptor : IFieldInterceptorAccessor, IInterceptionBehavior
     {
+        private readonly object _target;
         private readonly System.Type[] _requiredInterfaces;
 
-        public LazyFieldInterceptor(params System.Type[] requiredInterfaces)
+        public LazyFieldInterceptor(object target, params System.Type[] requiredInterfaces)
         {
+            if (target == null)
+            {
+                throw new ArgumentNullException("target");
+            }
+
+            _target = target;
             _requiredInterfaces = requiredInterfaces.Concat(new[] { typeof(IFieldInterceptorAccessor) }).ToArray();
         }
 
@@ -41,42 +48,38 @@ namespace NHibernate.Bytecode.Unity
             {
                 if (ReflectHelper.IsPropertyGet((MethodInfo)input.MethodBase))
                 {
-                    var methodReturn = getNext().Invoke(input, getNext); // get the existing value
+                    if (input.MethodBase.DeclaringType == typeof(IFieldInterceptorAccessor) && "get_FieldInterceptor".Equals(input.MethodBase.Name))
+                    {
+                        return input.CreateMethodReturn(FieldInterceptor);
+                    }
 
-                    var result = FieldInterceptor.Intercept(
-                        input.Target,
-                        ReflectHelper.GetPropertyName((MethodInfo)input.MethodBase),
-                        methodReturn.ReturnValue);
+                    var propValue = input.MethodBase.Invoke(_target, input.Arguments.Cast<object>().ToArray());
+
+                    var result = FieldInterceptor.Intercept(input.Target, ReflectHelper.GetPropertyName((MethodInfo)input.MethodBase), propValue);
 
                     if (result != AbstractFieldInterceptor.InvokeImplementation)
                     {
-                        methodReturn.ReturnValue = result;
+                        return input.CreateMethodReturn(result);
                     }
-
-                    return methodReturn;
                 }
-
-                if (ReflectHelper.IsPropertySet((MethodInfo)input.MethodBase))
+                else if (ReflectHelper.IsPropertySet((MethodInfo)input.MethodBase))
                 {
+                    if (input.MethodBase.DeclaringType == typeof(IFieldInterceptorAccessor) && "set_FieldInterceptor".Equals(input.MethodBase.Name))
+                    {
+                        FieldInterceptor = (IFieldInterceptor)input.Arguments[0];
+                        return null;
+                    }
                     FieldInterceptor.MarkDirty();
-                    FieldInterceptor.Intercept(input.Target, ReflectHelper.GetPropertyName((MethodInfo)input.MethodBase), null);
+                    FieldInterceptor.Intercept(input.Target, ReflectHelper.GetPropertyName((MethodInfo)input.MethodBase), input.Arguments[0]);
                 }
-
-                return getNext().Invoke(input, getNext);
             }
-
-            if (input.MethodBase.DeclaringType == typeof(IFieldInterceptorAccessor) && ReflectHelper.IsPropertyGet((MethodInfo)input.MethodBase))
-            {
-                return input.CreateMethodReturn(FieldInterceptor);
-            }
-
-            if (input.MethodBase.DeclaringType == typeof(IFieldInterceptorAccessor) && ReflectHelper.IsPropertySet((MethodInfo)input.MethodBase))
+            else if (input.MethodBase.DeclaringType == typeof(IFieldInterceptorAccessor) && ReflectHelper.IsPropertySet((MethodInfo)input.MethodBase) && "set_FieldInterceptor".Equals(input.MethodBase.Name))
             {
                 FieldInterceptor = (IFieldInterceptor)input.Arguments[0];
                 return input.CreateMethodReturn(null);
             }
 
-            return getNext().Invoke(input, getNext);
+            return input.CreateMethodReturn(input.MethodBase.Invoke(_target, input.Arguments.Cast<object>().ToArray()));
         }
 
         public IEnumerable<System.Type> GetRequiredInterfaces()

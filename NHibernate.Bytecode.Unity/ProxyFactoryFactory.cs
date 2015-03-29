@@ -6,18 +6,31 @@
 // <copyrigth>http://www.odra.com.ar/LGPL-3.0.txt</copyrigth>
 // ---------------------------------------------------------------
 
-using Microsoft.Practices.Unity.InterceptionExtension;
+using Microsoft.Practices.Unity;
 using NHibernate.Proxy;
 
 namespace NHibernate.Bytecode.Unity
 {
     public class ProxyFactoryFactory : IProxyFactoryFactory
     {
+        private readonly IUnityContainer _container;
+
+
+        public ProxyFactoryFactory()
+            : this(new UnityContainer())
+        {
+        }
+
+        public ProxyFactoryFactory(IUnityContainer container)
+        {
+            _container = container;
+        }
+
         #region IProxyFactoryFactory Members
 
         public IProxyFactory BuildProxyFactory()
         {
-            return new ProxyFactory();
+            return new ProxyFactory(_container);
         }
 
         public IProxyValidator ProxyValidator
@@ -32,7 +45,7 @@ namespace NHibernate.Bytecode.Unity
 
         public bool IsProxy(object entity)
         {
-            return entity is IInterceptingProxy && entity is INHibernateProxy; ;
+            return entity is INHibernateProxy;
         }
 
         #endregion

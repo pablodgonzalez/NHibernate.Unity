@@ -6,21 +6,17 @@
 // <copyrigth>http://www.odra.com.ar/LGPL-3.0.txt</copyrigth>
 // ---------------------------------------------------------------
 
+using System;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("NHibernate.Bytecode.Unity.Configuration")]
+[assembly: CLSCompliant(true)]
+[assembly: AssemblyTitle("NHibernate.Unity.Configuration")]
 [assembly: AssemblyDescription("Unity configuration utils for NHibernate.")]
-[assembly: AssemblyCompany("ODRA Soluciones Informáticas")]
-[assembly: AssemblyCopyright("Copyright © ODRA Soluciones Informáticas 2012")]
 [assembly: AssemblyProduct("NHibernate.Unity.Configuration")]
-[assembly: AssemblyConfiguration("")]
-[assembly: AssemblyVersionAttribute("3.1.0.4000")]
-[assembly: AssemblyInformationalVersionAttribute("3.1.0.4000")]
-[assembly: AssemblyFileVersionAttribute("3.1.0.4000")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
